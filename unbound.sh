@@ -51,7 +51,7 @@ server:
     # data in the cache is as the domain owner intended, higher values,
     # especially more than an hour or so, can lead to trouble as the data in
     # the cache does not match up with the actual data any more.
-    cache-min-ttl: 300
+    cache-min-ttl: 60
     # Set the working directory for the program.
     directory: "/opt/unbound/etc/unbound"
     # RFC 6891. Number  of bytes size to advertise as the EDNS reassembly buffer
@@ -75,18 +75,22 @@ server:
     ###########################################################################
     # LOGGING
     ###########################################################################
-    # Do not print log lines to inform about local zone actions
-    log-local-actions: no
-    # Do not print one line per query to the log
-    log-queries: no
-    # Do not print one line per reply to the log
-    log-replies: no
-    # Do not print log lines that say why queries return SERVFAIL to clients
-    log-servfail: no
+    # Print log lines to inform about local zone actions
+    log-local-actions: yes
+    # Print one line per query to the log
+    log-queries: yes
+    # Print one line per reply to the log
+    log-replies: yes
+    # Print log lines that say why queries return SERVFAIL to clients
+    log-servfail: yes
     # Further limit logging
-    logfile: /dev/null
-    # Only log errors
-    verbosity: 0
+    logfile: /var/logs/unbound.log
+    # Level 1 gives operational information.
+    # Level 2 gives  detailed operational  information.
+    # Level 3 gives query level information, output per query.
+    # Level 4 gives  algorithm  level  information.
+    # Level 5 logs client identification for cache misses.
+    verbosity: 5
     ###########################################################################
     # PRIVACY SETTINGS
     ###########################################################################
@@ -122,8 +126,10 @@ server:
     access-control: 192.168.0.0/16 allow
     access-control: 172.16.0.0/12 allow
     access-control: 10.0.0.0/8 allow
-    # access-control: fc00::/7 allow
-    # access-control: ::1/128 allow
+    access-control: fc00::/7 allow
+    access-control: ::1/128 allow
+    # allow everyone to access, public recursive server, we are
+    access-control: 0.0.0.0/0 allow
     # File with trust anchor for  one  zone, which is tracked with RFC5011
     # probes.
     auto-trust-anchor-file: "var/root.key"
@@ -266,15 +272,9 @@ server:
     # incoming queries to threads more evenly.
     so-reuseport: yes
     ###########################################################################
-    # LOCAL ZONE
+    # EDNS SETTINGS
     ###########################################################################
-    # Include file for local-data and local-data-ptr
-    include: /opt/unbound/etc/unbound/a-records.conf
-    include: /opt/unbound/etc/unbound/srv-records.conf
-    ###########################################################################
-    # FORWARD ZONE
-    ###########################################################################
-    include: /opt/unbound/etc/unbound/forward-records.conf
+
 remote-control:
     control-enable: no
 EOT

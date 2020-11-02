@@ -21,7 +21,15 @@ ARG UNBOUND_SHA1=68009078d5f5025c95a8c9fe20b9e84335d53e2d
 RUN curl -fsSL --retry 3 "${UNBOUND_SOURCE}${UNBOUND_VERSION}.tar.gz" -o unbound.tar.gz \
 	&& echo "${UNBOUND_SHA1}  unbound.tar.gz" | sha1sum -c - \
 	&& tar xzf unbound.tar.gz --strip 1 \
-	&& ./configure --with-pthreads --with-libevent --prefix=/opt/unbound --with-run-dir=/var/run/unbound --with-username= --with-chroot-dir= --enable-fully-static --disable-shared --enable-event-api --disable-flto \
+	&& ./configure --with-pthreads --with-libevent \
+  --prefix=/opt/unbound \
+  --with-run-dir=/var/run/unbound \
+  --with-username= \
+  --with-chroot-dir= \
+  --enable-fully-static \
+  --disable-shared \
+  --enable-event-api \
+  --disable-flto \
 	&& make -j 4 install
 
 WORKDIR /tmp/ldns
@@ -50,11 +58,11 @@ RUN mv /opt/unbound/etc/unbound/unbound.conf /opt/unbound/etc/unbound/example.co
 
 FROM scratch
 
-LABEL org.opencontainers.image.authors "Kyle Harding <https://klutchell.dev>"
-LABEL org.opencontainers.image.url "https://gitlab.com/klutchell/unbound"
-LABEL org.opencontainers.image.documentation "https://gitlab.com/klutchell/unbound"
-LABEL org.opencontainers.image.source "https://gitlab.com/klutchell/unbound"
-LABEL org.opencontainers.image.title "klutchell/unbound"
+LABEL org.opencontainers.image.authors "Jonathan Grant <https://gsmlg.com>"
+LABEL org.opencontainers.image.url "https://github.com/gsmlg/unbound-docker"
+LABEL org.opencontainers.image.documentation "https://github.com/gsmlg/unbound-docker"
+LABEL org.opencontainers.image.source "https://github.com/gsmlg/unbound-docker"
+LABEL org.opencontainers.image.title "gsmlg/unbound-docker"
 LABEL org.opencontainers.image.description "Unbound is a validating, recursive, caching DNS resolver"
 
 COPY --from=build /etc/passwd /etc/group /etc/
@@ -73,4 +81,4 @@ ENV PATH /opt/unbound/sbin:/opt/ldns/bin:${PATH}
 ENTRYPOINT ["unbound", "-d"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-	CMD [ "drill", "-p", "5053", "nlnetlabs.nl", "@127.0.0.1" ]
+	CMD [ "drill", "-p", "53", "zdns.cn", "@127.0.0.1" ]

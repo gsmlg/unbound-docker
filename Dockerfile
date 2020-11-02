@@ -1,147 +1,76 @@
-FROM debian:buster as openssl
-LABEL maintainer="GSMLG"
+FROM alpine:3.10 as build
 
-ENV VERSION_OPENSSL=openssl-1.1.1h \
-    SHA256_OPENSSL=5c9ca8774bd7b03e5784f26ae9e9e6d749c9da2438545077e6b3d755a06595d9 \
-    SOURCE_OPENSSL=https://www.openssl.org/source/ \
-    OPGP_OPENSSL=8657ABB260F056B1E5190839D9C4D26D0E604491
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
-WORKDIR /tmp/src
+RUN apk add --no-cache \
+	build-base=0.5-r1 \
+	curl=7.66.0-r1 \
+	expat-dev=2.2.8-r0 \
+	libevent-dev=2.1.10-r0 \
+	libevent-static=2.1.10-r0 \
+	linux-headers=4.19.36-r0 \
+	openssl-dev=1.1.1g-r0 \
+	perl=5.28.3-r0
 
-RUN set -e -x && \
-    build_deps="build-essential ca-certificates curl dirmngr gnupg libidn2-0-dev libssl-dev" && \
-    DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
-      $build_deps && \
-    curl -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz -o openssl.tar.gz && \
-    echo "${SHA256_OPENSSL} ./openssl.tar.gz" | sha256sum -c - && \
-    curl -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz.asc -o openssl.tar.gz.asc && \
-    GNUPGHOME="$(mktemp -d)" && \
-    export GNUPGHOME && \
-    ( gpg --no-tty --keyserver ipv4.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL" \
-    || gpg --no-tty --keyserver ha.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL" ) && \
-    gpg --batch --verify openssl.tar.gz.asc openssl.tar.gz && \
-    tar xzf openssl.tar.gz && \
-    cd $VERSION_OPENSSL && \
-    ./config \
-      --prefix=/opt/openssl \
-      --openssldir=/opt/openssl \
-      no-weak-ssl-ciphers \
-      no-ssl3 \
-      no-shared \
-      enable-ec_nistp_64_gcc_128 \
-      -DOPENSSL_NO_HEARTBEATS \
-      -fstack-protector-strong && \
-    make depend && \
-    make && \
-    make install_sw && \
-    apt-get purge -y --auto-remove \
-      $build_deps && \
-    rm -rf \
-        /tmp/* \
-        /var/tmp/* \
-        /var/lib/apt/lists/*
+WORKDIR /tmp/unbound
 
-FROM debian:buster as unbound
-LABEL maintainer="GSMLG"
+ARG UNBOUND_SOURCE=https://www.nlnetlabs.nl/downloads/unbound/unbound-
+ARG UNBOUND_VERSION=1.12.0
+ARG UNBOUND_SHA1=68009078d5f5025c95a8c9fe20b9e84335d53e2d
 
-ENV NAME=unbound \
-    UNBOUND_VERSION=1.12.0 \
-    UNBOUND_SHA256=5b9253a97812f24419bf2e6b3ad28c69287261cf8c8fa79e3e9f6d3bf7ef5835 \
-    UNBOUND_DOWNLOAD_URL=https://nlnetlabs.nl/downloads/unbound/unbound-1.12.0.tar.gz
+RUN curl -fsSL --retry 3 "${UNBOUND_SOURCE}${UNBOUND_VERSION}.tar.gz" -o unbound.tar.gz \
+	&& echo "${UNBOUND_SHA1}  unbound.tar.gz" | sha1sum -c - \
+	&& tar xzf unbound.tar.gz --strip 1 \
+	&& ./configure --with-pthreads --with-libevent --prefix=/opt/unbound --with-run-dir=/var/run/unbound --with-username= --with-chroot-dir= --enable-fully-static --disable-shared --enable-event-api --disable-flto \
+	&& make -j 4 install
 
-WORKDIR /tmp/src
+WORKDIR /tmp/ldns
 
-COPY --from=openssl /opt/openssl /opt/openssl
+ARG LDNS_SOURCE=https://www.nlnetlabs.nl/downloads/ldns/ldns-
+ARG LDNS_VERSION=1.7.1
+ARG LDNS_SHA1=d075a08972c0f573101fb4a6250471daaa53cb3e
 
-RUN build_deps="curl gcc libc-dev libevent-dev libexpat1-dev libnghttp2-dev make" && \
-    set -x && \
-    DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
-      $build_deps \
-      bsdmainutils \
-      ca-certificates \
-      ldnsutils \
-      libevent-2.1-6 \
-      libexpat1 && \
-    curl -sSL $UNBOUND_DOWNLOAD_URL -o unbound.tar.gz && \
-    echo "${UNBOUND_SHA256} *unbound.tar.gz" | sha256sum -c - && \
-    tar xzf unbound.tar.gz && \
-    rm -f unbound.tar.gz && \
-    cd unbound-1.12.0 && \
-    groupadd _unbound && \
-    useradd -g _unbound -s /etc -d /dev/null _unbound && \
-    ./configure \
-        --disable-dependency-tracking \
-        --prefix=/opt/unbound \
-        --with-pthreads \
-        --with-username=_unbound \
-        --with-ssl=/opt/openssl \
-        --with-libevent \
-        --with-libnghttp2 \
-        --enable-tfo-server \
-        --enable-tfo-client \
-        --enable-subnet \
-        --enable-event-api && \
-    make install && \
-    mv /opt/unbound/etc/unbound/unbound.conf /opt/unbound/etc/unbound/unbound.conf.example && \
-    apt-get purge -y --auto-remove \
-      $build_deps && \
-    rm -rf \
-        /opt/unbound/share/man \
-        /tmp/* \
-        /var/tmp/* \
-        /var/lib/apt/lists/*
+RUN curl -fsSL --retry 3 "${LDNS_SOURCE}${LDNS_VERSION}.tar.gz" -o ldns.tar.gz \
+	&& echo "${LDNS_SHA1}  ldns.tar.gz" | sha1sum -c - \
+	&& tar xzf ldns.tar.gz --strip 1 \
+	&& sed -e 's/@LDFLAGS@/@LDFLAGS@ -all-static/' -i Makefile.in \
+	&& ./configure --prefix=/opt/ldns --with-drill --disable-shared \
+	&& make -j 4 \
+	&& make install
 
+WORKDIR /var/run/unbound
 
-FROM debian:buster
-LABEL maintainer="GSMLG"
+RUN mv /opt/unbound/etc/unbound/unbound.conf /opt/unbound/etc/unbound/example.conf \
+	&& rm -rf /tmp/* /opt/*/include /opt/*/man /opt/*/share \
+	&& strip /opt/unbound/sbin/unbound \
+	&& strip /opt/ldns/bin/drill \
+	&& (/opt/unbound/sbin/unbound-anchor -v || :)
 
-ENV NAME=unbound \
-    VERSION=1.2 \
-    SUMMARY="${NAME} is a validating, recursive, and caching DNS resolver." \
-    DESCRIPTION="${NAME} is a validating, recursive, and caching DNS resolver."
+# ----------------------------------------------------------------------------
 
-LABEL summary="${SUMMARY}" \
-      description="${DESCRIPTION}" \
-      io.k8s.description="${DESCRIPTION}" \
-      io.k8s.display-name="Unbound ${UNBOUND_VERSION}" \
-      name="mvance/${NAME}" \
-      maintainer="GSMLG"
+FROM scratch
 
-WORKDIR /tmp/src
+LABEL org.opencontainers.image.authors "Kyle Harding <https://klutchell.dev>"
+LABEL org.opencontainers.image.url "https://gitlab.com/klutchell/unbound"
+LABEL org.opencontainers.image.documentation "https://gitlab.com/klutchell/unbound"
+LABEL org.opencontainers.image.source "https://gitlab.com/klutchell/unbound"
+LABEL org.opencontainers.image.title "klutchell/unbound"
+LABEL org.opencontainers.image.description "Unbound is a validating, recursive, caching DNS resolver"
 
-COPY --from=unbound /opt /opt
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /lib/ld-musl-*.so.1 /lib/
 
-RUN set -x && \
-    DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
-      bsdmainutils \
-      ca-certificates \
-      ldnsutils \
-      libevent-2.1-6 \
-      libnghttp2-14 \
-      libexpat1 && \
-    groupadd _unbound && \
-    useradd -g _unbound -s /etc -d /dev/null _unbound && \
-    apt-get purge -y --auto-remove \
-      $build_deps && \
-    rm -rf \
-        /opt/unbound/share/man \
-        /tmp/* \
-        /var/tmp/* \
-        /var/lib/apt/lists/*
+COPY --from=build /opt /opt
+COPY --from=build --chown=nobody:nogroup /var/run/unbound /var/run/unbound
 
-COPY unbound.sh /
+COPY a-records.conf unbound.conf /opt/unbound/etc/unbound/
 
-RUN chmod +x /unbound.sh
+USER nobody
 
-WORKDIR /opt/unbound/
+ENV PATH /opt/unbound/sbin:/opt/ldns/bin:${PATH}
 
-ENV PATH /opt/unbound/sbin:"$PATH"
+ENTRYPOINT ["unbound", "-d"]
 
-EXPOSE 53/tcp
-EXPOSE 53/udp
-
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s CMD drill @127.0.0.1 zdns.cn || exit 1
-
-CMD ["/unbound.sh"]
-
-
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+	CMD [ "drill", "-p", "5053", "nlnetlabs.nl", "@127.0.0.1" ]

@@ -2,7 +2,7 @@ name: Docker deploy
 
 on:
   push:
-    branches: [ alpine ]
+    branches: [ simple ]
 
 jobs:
   buildx:
@@ -27,4 +27,4 @@ jobs:
             --platform linux/amd64,linux/386,linux/arm64/v8,linux/arm/v7 \
             --push \
             . \
-            -t ${{ secrets.DOCKERHUB_REPO_ALPINE }}
+            -t ${{ secrets.DOCKERHUB_REPO_SIMPLE }}

@@ -1,7 +1,7 @@
 FROM debian:buster as openssl
 LABEL maintainer="GSMLG"
 
-ENV VERSION_OPENSSL=openssl-1.1.1h \
+ENV VERSION_OPENSSL=openssl-1.1.1j \
     SHA256_OPENSSL=5c9ca8774bd7b03e5784f26ae9e9e6d749c9da2438545077e6b3d755a06595d9 \
     SOURCE_OPENSSL=https://www.openssl.org/source/ \
     OPGP_OPENSSL=8657ABB260F056B1E5190839D9C4D26D0E604491
@@ -45,9 +45,9 @@ FROM debian:buster as unbound
 LABEL maintainer="GSMLG"
 
 ENV NAME=unbound \
-    UNBOUND_VERSION=1.12.0 \
-    UNBOUND_SHA256=5b9253a97812f24419bf2e6b3ad28c69287261cf8c8fa79e3e9f6d3bf7ef5835 \
-    UNBOUND_DOWNLOAD_URL=https://nlnetlabs.nl/downloads/unbound/unbound-1.12.0.tar.gz
+    UNBOUND_VERSION=1.13.1 \
+    UNBOUND_SHA256=8504d97b8fc5bd897345c95d116e0ee0ddf8c8ff99590ab2b4bd13278c9f50b8 \
+    UNBOUND_DOWNLOAD_URL=https://nlnetlabs.nl/downloads/unbound/unbound-1.13.1.tar.gz
 
 WORKDIR /tmp/src
 
@@ -66,7 +66,7 @@ RUN build_deps="curl gcc libc-dev libevent-dev libexpat1-dev libnghttp2-dev make
     echo "${UNBOUND_SHA256} *unbound.tar.gz" | sha256sum -c - && \
     tar xzf unbound.tar.gz && \
     rm -f unbound.tar.gz && \
-    cd unbound-1.12.0 && \
+    cd unbound-1.13.1 && \
     groupadd _unbound && \
     useradd -g _unbound -s /etc -d /dev/null _unbound && \
     ./configure \
